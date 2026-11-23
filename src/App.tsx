@@ -4,6 +4,7 @@ import { CursorTrail } from './components/CursorTrail'
 import { Sparkle, StarfieldBackground } from './components/decorations'
 import { ProblemTable } from './components/ProblemTable'
 import { ProgressSummary } from './components/ProgressSummary'
+import { WeeklyPlan } from './components/WeeklyPlan'
 import { participants } from './data/participants'
 import problemsData from './data/problems.json'
 import { fetchParticipantGithubData, GitHubApiError } from './services/github'
@@ -14,6 +15,10 @@ const problems = problemsData as Problem[]
 const configuredParticipants = participants.filter(isParticipantConfigured)
 const categoryOrder = [...new Set(problems.map((p) => p.category))]
 const RECENTLY_COMPLETED_DISPLAY_MS = 1500
+const tabs = [
+  { id: 'tracker', label: 'NeetCode 150' },
+  { id: 'weekly-plan', label: 'Weekly Plan' },
+] as const
 
 interface ParticipantError {
   participantName: string
@@ -26,6 +31,7 @@ function formatLastSubmission(date: Date | null): string {
 }
 
 function App() {
+  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]['id']>('tracker')
   const [completionByParticipant, setCompletionByParticipant] = useState<Record<string, Set<string>>>({})
   const [lastSubmission, setLastSubmission] = useState<Date | null>(null)
   const [loading, setLoading] = useState(false)
@@ -118,19 +124,59 @@ function App() {
               NeetCode with Frenz
               <Sparkle className="h-5 w-5 text-butter motion-safe:animate-[gentle-bob_4s_ease-in-out_infinite]" />
             </h1>
-            <p className="mt-1 text-xs text-slate-400">{formatLastSubmission(lastSubmission)}</p>
+            {activeTab === 'tracker' && <p className="mt-1 text-xs text-slate-400">{formatLastSubmission(lastSubmission)}</p>}
           </div>
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={loading}
-            className="font-display shrink-0 rounded-full border border-lavender/30 bg-night-card px-4 py-1.5 text-sm font-semibold text-lavender shadow-sm transition-colors hover:bg-lavender/10 disabled:opacity-50"
-          >
-            {loading ? 'Refreshing…' : '✨ Refresh'}
-          </button>
+          {activeTab === 'tracker' && (
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={loading}
+              className="font-display shrink-0 rounded-full border border-lavender/30 bg-night-card px-4 py-1.5 text-sm font-semibold text-lavender shadow-sm transition-colors hover:bg-lavender/10 disabled:opacity-50"
+            >
+              {loading ? 'Refreshing…' : '✨ Refresh'}
+            </button>
+          )}
         </div>
 
-        {errors.length > 0 && (
+        <div role="tablist" aria-label="Study dashboard" className="mt-4 flex gap-2">
+          {tabs.map(({ id, label }) => (
+            <button
+              key={id}
+              id={`tab-${id}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === id}
+              aria-controls={`panel-${id}`}
+              tabIndex={activeTab === id ? 0 : -1}
+              className="font-display min-h-10 rounded-full border border-lavender/20 bg-night-card px-4 text-sm font-semibold text-slate-300 hover:bg-lavender/10 focus-visible:outline-2 focus-visible:outline-lavender aria-selected:border-lavender/40 aria-selected:bg-lavender/15 aria-selected:text-lavender"
+              onClick={() => setActiveTab(id)}
+              onKeyDown={(event) => {
+                let nextTab: (typeof tabs)[number]['id']
+                switch (event.key) {
+                  case 'Home':
+                    nextTab = tabs[0].id
+                    break
+                  case 'End':
+                    nextTab = tabs[1].id
+                    break
+                  case 'ArrowLeft':
+                  case 'ArrowRight':
+                    nextTab = id === tabs[0].id ? tabs[1].id : tabs[0].id
+                    break
+                  default:
+                    return
+                }
+                event.preventDefault()
+                setActiveTab(nextTab)
+                document.getElementById(`tab-${nextTab}`)?.focus()
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'tracker' && errors.length > 0 && (
           <div className="mt-4 space-y-1 rounded-2xl border border-blush/30 bg-blush/10 px-3 py-2 text-sm text-blush">
             {errors.map((e) => (
               <p key={e.participantName}>
@@ -142,27 +188,32 @@ function App() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 pb-12">
-        <ProgressSummary
-          participants={participants}
-          completionByParticipant={completionByParticipant}
-          totalProblems={problems.length}
-        />
+        <section id="panel-tracker" role="tabpanel" aria-labelledby="tab-tracker" hidden={activeTab !== 'tracker'}>
+          <ProgressSummary
+            participants={participants}
+            completionByParticipant={completionByParticipant}
+            totalProblems={problems.length}
+          />
 
-        <CategoryFilter
-          categories={categoryOrder}
-          selectedCategory={selectedCategory}
-          onSelectCategory={setSelectedCategory}
-          focusParticipantName={focusParticipant?.name ?? null}
-          hideCompleted={hideCompleted}
-          onToggleHideCompleted={() => setHideCompleted((prev) => !prev)}
-        />
+          <CategoryFilter
+            categories={categoryOrder}
+            selectedCategory={selectedCategory}
+            onSelectCategory={setSelectedCategory}
+            focusParticipantName={focusParticipant?.name ?? null}
+            hideCompleted={hideCompleted}
+            onToggleHideCompleted={() => setHideCompleted((prev) => !prev)}
+          />
 
-        <ProblemTable
-          problems={filteredProblems}
-          participants={participants}
-          completionByParticipant={completionByParticipant}
-          recentlyCompleted={recentlyCompleted}
-        />
+          <ProblemTable
+            problems={filteredProblems}
+            participants={participants}
+            completionByParticipant={completionByParticipant}
+            recentlyCompleted={recentlyCompleted}
+          />
+        </section>
+        <section id="panel-weekly-plan" role="tabpanel" aria-labelledby="tab-weekly-plan" hidden={activeTab !== 'weekly-plan'}>
+          <WeeklyPlan participants={participants} />
+        </section>
       </main>
     </div>
   )
